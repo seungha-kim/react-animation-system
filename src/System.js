@@ -1,19 +1,14 @@
 import React, { Component, Fragment } from "react";
 import ReactDOM from "react-dom";
 import { delay } from "./utils/time";
-
-function flatMap(arr, mapper) {
-  return arr.reduce(
-    (acc, item, index, arr) => [...acc, ...mapper(item, index, arr)],
-    []
-  );
-}
+import { flatMap } from "./utils/arr";
+import Panel from "./Panel";
 
 export default class System extends Component {
   static defaultProps = {
+    title: "Sliders",
     showPanel: true,
     panelWidth: 500,
-    title: "CircleDots",
     autoPlay: true,
     sliders: [],
     indices: []
@@ -25,7 +20,7 @@ export default class System extends Component {
       _elapsed: 0,
       time: 0,
       playing: props.autoPlay,
-      ...props.sliders.reduce(
+      values: props.sliders.reduce(
         (values, opt) => ({
           ...values,
           [opt.name]: opt.defaultValue || opt.min || opt.max || 0
@@ -55,28 +50,41 @@ export default class System extends Component {
     this.initial = Date.now();
     this._isMounted = true;
     this.tick();
-    this.setState({
-      _panelEl:
-        this.props.panelId && document.getElementById(this.props.panelId)
-    });
+
+    const { panelId } = this.props;
+    if (panelId) {
+      const parentEl = document.getElementById(this.props.panelId);
+      if (parentEl) {
+        const _panelEl = document.createElement("div");
+        parentEl.appendChild(_panelEl);
+        this.setState({
+          _panelEl
+        });
+      }
+    }
   }
 
   componentWillUnmount() {
     this._isMounted = false;
+
+    const { _panelEl } = this.state;
+    if (_panelEl) {
+      _panelEl.parentNode.removeChild(_panelEl);
+    }
   }
 
   setValue = (name, value) => {
-    this.setState({
-      [name]: value
-    });
-  };
-
-  getValue = name => {
-    return this.state[name];
+    this.setState(prev => ({
+      ...prev,
+      values: {
+        ...prev.values,
+        [name]: value
+      }
+    }));
   };
 
   render() {
-    const { render, sliders, indices } = this.props;
+    const { title, render, sliders, indices } = this.props;
     const { _panelEl, time } = this.state;
 
     const elOpts = indices.reduce(
@@ -91,66 +99,22 @@ export default class System extends Component {
       },
       [{ time }]
     );
-    // for (const idx of _indices) {
-    //   const name = idx.name;
-    //   const delay = idx.delay || 0;
-    //   const value = 2; // FIXME
-    //   elOpts = flatMap(elOpts, (elOpt, index) => {
-    //     return new Array(value).fill(null).map(() => ({
-    //       ...elOpt,
-    //       [name]: index,
-    //       time: elOpt.time + delay * index
-    //     }));
-    //   });
-    // }
     return (
       <>
         {_panelEl &&
           ReactDOM.createPortal(
-            <table
-              style={{
-                fontFamily: "sans-serif",
-                backgroundColor: "#eee",
-                padding: "10px"
-              }}
-            >
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Slider</th>
-                  <th>Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sliders.map((sliderOption, i) => {
-                  const { name, min, max, step } = sliderOption;
-                  const value = this.getValue(name);
-                  return (
-                    <tr key={i}>
-                      <td>{name}</td>
-                      <td>
-                        <input
-                          type="range"
-                          name={name}
-                          min={min}
-                          max={max}
-                          step={step}
-                          value={value}
-                          onChange={e =>
-                            this.setValue(name, parseInt(e.target.value, 10))
-                          }
-                        />
-                      </td>
-                      <td style={{ textAlign: "right" }}>{value}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>,
+            <Panel
+              title={title}
+              setValue={this.setValue}
+              sliders={sliders}
+              values={this.state.values}
+            />,
             _panelEl
           )}
         {elOpts.map((elOpt, index) => (
-          <Fragment key={index}>{render({ ...this.state, ...elOpt })}</Fragment>
+          <Fragment key={index}>
+            {render({ ...this.state, ...this.state.values, ...elOpt })}
+          </Fragment>
         ))}
       </>
     );
